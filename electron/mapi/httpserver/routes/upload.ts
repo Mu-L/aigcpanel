@@ -11,18 +11,28 @@ const router = Router();
 
 // ── Multer config ─────────────────────────────────────────────────────────
 
-const uploadDir = path.join(AppEnv.dataRoot, "temp", "uploads");
+/**
+ * 惰性获取上传目录路径。
+ *
+ * ⚠️ 必须用函数而非模块级常量：AppEnv.dataRoot 在模块加载阶段还未初始化，
+ * 在 main/index.ts 的 import 链中本模块会被提前加载，此时 AppEnv.dataRoot
+ * 仍为 null，若直接 path.join(...) 会抛出 ERR_INVALID_ARG_TYPE 导致启动崩溃。
+ * 使用函数确保只在真正处理上传请求时才访问 AppEnv.dataRoot，此时 dataRoot
+ * 已经初始化完毕。
+ */
+const getUploadDir = (): string => path.join(AppEnv.dataRoot, "temp", "uploads");
 
 const ensureUploadDir = () => {
-    if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
+    const dir = getUploadDir();
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
     }
 };
 
 const storage = multer.diskStorage({
     destination: (_req, _file, cb) => {
         ensureUploadDir();
-        cb(null, uploadDir);
+        cb(null, getUploadDir());
     },
     filename: (_req, file, cb) => {
         const ext = path.extname(file.originalname) || "";
@@ -113,7 +123,7 @@ router.post(
         ensureUploadDir();
         const fileName =
             name || `${Date.now()}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}${ext}`;
-        const filePath = path.join(uploadDir, fileName);
+        const filePath = path.join(getUploadDir(), fileName);
         await fs.promises.writeFile(filePath, buffer);
 
         sendJson(res, 200, {
